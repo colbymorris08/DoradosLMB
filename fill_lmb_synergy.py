@@ -8,6 +8,7 @@ packet already has them. Release photos are copied only for name matches in
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import re
@@ -25,6 +26,8 @@ PICS = Path.home() / "Downloads" / "LBPRC SANTURCE ADVANCE PITCHER RELEASE PICTU
 ASSETS = ROOT / "assets" / "advance"
 DATA = ROOT / "data"
 CKPT = ROOT / "runs" / "lmb_synergy_checkpoint.json"
+LOCK_PATH = ROOT / "runs" / "lmb_synergy.lock"
+USE_LEAGUE_FILTER = False
 sys.path.insert(0, str(SANTURCE))
 
 import build_advance_synergy as bas  # noqa: E402
@@ -57,7 +60,22 @@ def load_json(path: Path) -> Any:
 
 
 def save_json(path: Path, payload: Any) -> None:
-    path.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+    os.replace(tmp, path)
+
+
+def file_lock():
+    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    handle = LOCK_PATH.open("a")
+    fcntl.flock(handle, fcntl.LOCK_EX)
+    return handle
+
+
+def unlock(handle) -> None:
+    fcntl.flock(handle, fcntl.LOCK_UN)
+    handle.close()
 
 
 def is_lmb(ev: dict) -> bool:
@@ -225,9 +243,11 @@ def fetch_lmb(token: str, *, sid: str, pitcher: bool) -> tuple[list[dict], int, 
         body = {
             "loggingPhases": [bas.LOGGING_PHASE_PITCH],
             "skip": skip,
-            "take": 100,
+            "take": 200,
             "pitcherId" if pitcher else "batterId": sid,
         }
+        if USE_LEAGUE_FILTER:
+            body["leagueIds"] = [LEAGUE_LMB]
         try:
             doc = bas.api_post(bas.EVENTS_FILTER_URL, token, body, timeout_s=90)
         except Exception as exc:  # noqa: BLE001
@@ -375,7 +395,15 @@ def reapply_savant(row: dict) -> None:
     savant.apply_to_row(row, pack)
 
 
-def write_outputs(by_id: dict[int, dict]) -> None:
+def write_outputs(by_id: dict[int, dict], dirty: set[int] | None = None) -> None:
+    handle = file_lock()
+    try:
+        _write_outputs(by_id, dirty)
+    finally:
+        unlock(handle)
+
+
+def _write_outputs(by_id: dict[int, dict], dirty: set[int] | None = None) -> None:
     arsenals = load_json(DATA / "pregame_pitcher_arsenals.json")
     hitters = load_json(DATA / "advance_opposing_hitters.json")
     heat_path = DATA / "advance_heatmaps.json"
@@ -384,10 +412,16 @@ def write_outputs(by_id: dict[int, dict]) -> None:
     heat["source"] = "Synergy LMB 2026 px/pz"
     heat.setdefault("hitters", {})
     heat.setdefault("pitchers", {})
-    spray_rows = []
+    spray_path = DATA / "pregame_spray_charts.json"
+    spray_doc = load_json(spray_path) if spray_path.is_file() else {}
+    spray_by = {}
+    for row in spray_doc.get("synergy") or []:
+        if row.get("player_id") is not None:
+            spray_by[int(row["player_id"])] = row
     ars_by = {int(r["player_id"]): r for r in arsenals.get("pitchers") or []}
     hit_by = {int(r["mlb_id"]): r for r in hitters.get("hitters") or [] if r.get("mlb_id")}
-    for player in by_id.values():
+    players = by_id.values() if dirty is None else [by_id[i] for i in dirty if i in by_id]
+    for player in players:
         if player["role"] == "P":
             base = ars_by.get(player["id"])
             if base is None:
@@ -412,13 +446,13 @@ def write_outputs(by_id: dict[int, dict]) -> None:
                     base[key] = val
             pts = extra.get("spray_points") or []
             if pts:
-                spray_rows.append({
+                spray_by[player["id"]] = {
                     "name": player["name"],
                     "team": player["team"],
                     "player_id": player["id"],
                     "points": pts,
                     "source": extra.get("synergy_source") or "Synergy",
-                })
+                }
         rec = player.get("heat")
         if rec and int(rec.get("located") or 0) > 0:
             bag = heat["pitchers"] if player["role"] == "P" else heat["hitters"]
@@ -430,8 +464,18 @@ def write_outputs(by_id: dict[int, dict]) -> None:
     save_json(DATA / "advance_heatmaps.json", heat)
     save_json(DATA / "pregame_spray_charts.json", {
         "synergy_note": "2026 Mexican League Synergy landing spots. RISP and 2K flags come from the pitch log.",
-        "synergy": spray_rows,
+        "synergy": list(spray_by.values()),
     })
+
+
+def save_checkpoint(pid: int, record: dict) -> None:
+    handle = file_lock()
+    try:
+        ckpt = load_json(CKPT) if CKPT.is_file() else {"done": {}}
+        ckpt.setdefault("done", {})[str(pid)] = record
+        save_json(CKPT, ckpt)
+    finally:
+        unlock(handle)
 
 
 def index_players() -> dict[int, dict]:
@@ -455,21 +499,55 @@ def index_players() -> dict[int, dict]:
     return out
 
 
+def probe_league_filter(token: str) -> None:
+    global USE_LEAGUE_FILTER
+    body = {
+        "loggingPhases": [bas.LOGGING_PHASE_PITCH],
+        "skip": 0,
+        "take": 5,
+        "batterId": "573d7056080cc2cbe8bf2eb8",
+        "leagueIds": [LEAGUE_LMB],
+    }
+    try:
+        doc = bas.api_post(bas.EVENTS_FILTER_URL, token, body, timeout_s=40)
+    except Exception as exc:  # noqa: BLE001
+        log(f"league filter off: {exc}")
+        return
+    rows = doc.get("result") if isinstance(doc, dict) else None
+    if isinstance(rows, list) and rows and all(is_lmb(ev) for ev in rows):
+        USE_LEAGUE_FILTER = True
+        log(f"league filter on total={doc.get('totalRecords')}")
+    else:
+        log("league filter ignored")
+
+
 def main() -> int:
+    global USE_LEAGUE_FILTER
     for k in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"):
         os.environ.pop(k, None)
     os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/Users/colbymorris/apexstats/pitch-tips/.pw-browsers")
     os.environ["NO_PROXY"] = "*"
     by_id = index_players()
-    pics = copy_release_pics(by_id)
-    seeded = seed_from_santurce(by_id)
-    write_outputs(by_id)
-    log(f"seed pics={pics} pitchers={seeded['pitchers']} hitters={seeded['hitters']} heat={seeded['heat']}")
+    if os.environ.get("LMB_SYNERGY_SKIP_SEED") != "1":
+        pics = copy_release_pics(by_id)
+        seeded = seed_from_santurce(by_id)
+        write_outputs(by_id)
+        log(f"seed pics={pics} pitchers={seeded['pitchers']} hitters={seeded['hitters']} heat={seeded['heat']}")
     if os.environ.get("LMB_SYNERGY_SEED_ONLY") == "1":
         return 0
     ckpt = load_json(CKPT) if CKPT.is_file() else {"done": {}}
     syn = Synergy()
-    players = sorted(by_id.values(), key=lambda p: (p["team"], p["role"], p["name"]))
+    probe_league_filter(syn.token)
+    first = [t.strip() for t in os.environ.get("LMB_SYNERGY_TEAM_FIRST", "").split(",") if t.strip()]
+
+    def sort_key(player: dict) -> tuple:
+        try:
+            rank = first.index(player["team"])
+        except ValueError:
+            rank = len(first) + 1
+        return (rank, player["team"], player["role"], player["name"])
+
+    players = sorted(by_id.values(), key=sort_key)
     only_teams = {t.strip() for t in os.environ.get("LMB_SYNERGY_TEAMS", "").split(",") if t.strip()}
     if only_teams:
         players = [p for p in players if p["team"] in only_teams]
@@ -477,6 +555,7 @@ def main() -> int:
     if limit:
         players = players[:limit]
     ok = miss = 0
+    dirty: set[int] = set()
     for i, player in enumerate(players, 1):
         pid = str(player["id"])
         prev = (ckpt.get("done") or {}).get(pid) or {}
@@ -486,9 +565,9 @@ def main() -> int:
         log(f"[{i}/{len(players)}] {player['team']} {player['role']} {player['name']}")
         sid, _row, rows = syn.search({"name": player["name"], "mlb_id": player["id"]})
         if not sid:
-            ckpt.setdefault("done", {})[pid] = {"status": "no_synergy_id", "candidates": [r.get("name") for r in (rows or [])[:5]]}
-            CKPT.parent.mkdir(parents=True, exist_ok=True)
-            save_json(CKPT, ckpt)
+            record = {"status": "no_synergy_id", "candidates": [r.get("name") for r in (rows or [])[:5]]}
+            ckpt.setdefault("done", {})[pid] = record
+            save_checkpoint(player["id"], record)
             log(f"  no synergy id ({len(rows or [])})")
             miss += 1
             continue
@@ -538,11 +617,16 @@ def main() -> int:
             ok += 1
             log(f"  pitches={record['pitches']} scanned={scanned}")
         ckpt.setdefault("done", {})[pid] = record
-        CKPT.parent.mkdir(parents=True, exist_ok=True)
-        save_json(CKPT, ckpt)
-        if i % 8 == 0:
-            write_outputs(by_id)
-    write_outputs(by_id)
+        dirty.add(player["id"])
+        if len(dirty) >= 4:
+            write_outputs(by_id, dirty)
+            for done_id in list(dirty):
+                save_checkpoint(done_id, ckpt["done"][str(done_id)])
+            dirty.clear()
+    if dirty:
+        write_outputs(by_id, dirty)
+        for done_id in list(dirty):
+            save_checkpoint(done_id, ckpt["done"][str(done_id)])
     log(f"done ok={ok} incomplete={miss}")
     return 0
 

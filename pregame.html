@@ -385,15 +385,14 @@
 <script>
 let CACHE = {}, FPS = {}, sortState = {}, FPS_AVG = { fps: 0.28, fpsRisp: 0.28 };
 const pct = v => v == null ? '—' : (v*100).toFixed(1)+'%';
-const ASSET_V = 'dor3';
+const ASSET_V = 'dor4';
 function fillLmbTeamSelects(){
   if(typeof LMB_TEAMS === 'undefined') return;
   ['match-team','hvp-team','spray-team','tth-team','adv-team'].forEach(id=>{
     const el = document.getElementById(id);
     if(!el) return;
     const prev = el.value || 'all';
-    const text = id === 'adv-team' ? (t=>t.abbrev) : (t=>t.name);
-    el.innerHTML = '<option value="all">All Teams</option>' + LMB_TEAMS.map(t=>`<option value="${t.abbrev}">${text(t)}</option>`).join('');
+    el.innerHTML = '<option value="all">All Teams</option>' + LMB_TEAMS.map(t=>`<option value="${t.abbrev}">${t.name}</option>`).join('');
     if([...el.options].some(o=>o.value===prev)) el.value = prev;
   });
 }
@@ -599,6 +598,10 @@ function cardRosterPlayers() {
   return (CACHE.cardStats && CACHE.cardStats.players) || [];
 }
 /** Full pitcher roster: arsenals file + any card-roster arms still missing a row. */
+function lmbTeamName(abbrev){
+  const row = (window.LMB_TEAMS || []).find(t => t.abbrev === abbrev);
+  return (row && row.name) || abbrev || '';
+}
 function arsenalPitchers() {
   const fromFile = [...((CACHE.arsenals && CACHE.arsenals.pitchers) || [])];
   const byKey = new Map(fromFile.map(r => [`${r.team || ''}|${r.name || ''}`, r]));
@@ -641,7 +644,7 @@ function fillArsenalTeamSelects() {
     const sel=document.getElementById(id);
     if(!sel) return;
     const cur=sel.value||'all';
-    sel.innerHTML = '<option value="all">All Teams</option>' + teams.map(t=>`<option value="${t}">${t}</option>`).join('');
+    sel.innerHTML = '<option value="all">All Teams</option>' + teams.map(t=>`<option value="${t}">${lmbTeamName(t)}</option>`).join('');
     sel.value = teams.includes(cur) || cur==='all' ? cur : 'all';
   });
 }
@@ -1026,7 +1029,7 @@ function renderBR(){
 function fillStuffTeams(){
   const teams=[...new Set((CACHE.stuff||[]).map(r=>r.team).filter(Boolean))].sort();
   const sel=document.getElementById('stuff-team');
-  sel.innerHTML = '<option value="all">All Teams</option>' + teams.map(t=>`<option value="${t}">${t}</option>`).join('');
+  sel.innerHTML = '<option value="all">All Teams</option>' + teams.map(t=>`<option value="${t}">${lmbTeamName(t)}</option>`).join('');
 }
 function renderStuff(){
   const q=(document.getElementById('stuff-search').value||'').toLowerCase();
@@ -2243,7 +2246,7 @@ function fillAdvancePitchers(){
   const rows = advancePitcherIndex();
   const teams = [...new Set(rows.map(r=>r.team).filter(Boolean))].sort();
   const prevTeam = teamSel.value || 'all';
-  teamSel.innerHTML = '<option value="all">All Teams</option>' + teams.map(t=>`<option value="${t}">${t}</option>`).join('');
+  teamSel.innerHTML = '<option value="all">All Teams</option>' + teams.map(t=>`<option value="${t}">${lmbTeamName(t)}</option>`).join('');
   teamSel.value = (prevTeam==='all' || teams.includes(prevTeam)) ? prevTeam : 'all';
   const team = teamSel.value;
   const q = normPersonName(searchEl?.value || '');

@@ -166,6 +166,82 @@ def apply_to_row(row: dict, pack: dict) -> bool:
     return True
 
 
+def backfill_older() -> int:
+    """Attach 2019–2021 MLB/AAA break for arms the 2022–2026 pass left empty.
+
+    Writes the movement cache only. The Synergy filler copies it onto arsenals.
+    """
+    older = (2021, 2020, 2019)
+    arsenal = json.loads(ARSENAL.read_text())
+    pitchers = arsenal.get("pitchers") or []
+    cache = json.loads(OUT.read_text()) if OUT.is_file() else {}
+    need = []
+    for row in pitchers:
+        pid = int(row.get("player_id") or 0)
+        if pid <= 0:
+            continue
+        cached = cache.get(str(pid)) or {}
+        if cached.get("pitches"):
+            continue
+        need.append(pid)
+    print(f"older-season check {len(need)}", flush=True)
+    qualified: dict[int, str] = {}
+    for year in older:
+        for sport_id, label in SPORTS:
+            for start in range(0, len(need), 40):
+                chunk = need[start:start + 40]
+                hydrate = f"stats(group=[pitching],type=[season],season={year},sportId={sport_id})"
+                url = (
+                    "https://statsapi.mlb.com/api/v1/people?personIds="
+                    + ",".join(str(value) for value in chunk)
+                    + "&hydrate=" + hydrate
+                )
+                try:
+                    payload = get_json(url, timeout=40)
+                except Exception as exc:
+                    print(f"  roster fail {year} {label}: {exc}", flush=True)
+                    continue
+                for person in payload.get("people") or []:
+                    pid = int(person.get("id") or 0)
+                    if not pid or qualified.get(pid) == "MLB":
+                        continue
+                    for stat in person.get("stats") or []:
+                        for split in stat.get("splits") or []:
+                            ip = (split.get("stat") or {}).get("inningsPitched")
+                            games = (split.get("stat") or {}).get("gamesPitched")
+                            if ip not in (None, "", "0.0", "0") or (games and int(games) > 0):
+                                if label == "MLB" or pid not in qualified:
+                                    qualified[pid] = label
+                                break
+                time.sleep(0.05)
+        print(f"  after {year}: {len(qualified)} extra MLB/AAA arms", flush=True)
+    saved_years = YEARS
+    filled = 0
+    try:
+        globals()["YEARS"] = older
+        for index, pid in enumerate(sorted(qualified), 1):
+            level = qualified[pid]
+            print(f"[{index}/{len(qualified)}] {pid} {level}", flush=True)
+            pack = fetch_movement(pid, level)
+            if pack and pack.get("pitches"):
+                cache[str(pid)] = pack
+                filled += 1
+            elif str(pid) not in cache:
+                cache[str(pid)] = {"mlb_id": pid, "level": level, "pitches": []}
+            if index % 10 == 0:
+                tmp = OUT.with_suffix(".json.tmp")
+                tmp.write_text(json.dumps(cache, ensure_ascii=False))
+                tmp.replace(OUT)
+            time.sleep(0.05)
+    finally:
+        globals()["YEARS"] = saved_years
+    tmp = OUT.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(cache, ensure_ascii=False))
+    tmp.replace(OUT)
+    print(f"older movement rows {filled}", flush=True)
+    return 0
+
+
 def main() -> int:
     arsenal = json.loads(ARSENAL.read_text())
     pitchers = arsenal.get("pitchers") or []
