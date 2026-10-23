@@ -142,7 +142,7 @@ def apply_to_row(row: dict, pack: dict) -> bool:
         if not src:
             continue
         seen.add(code)
-        for key in ("ivb", "hb_pitcher", "hb_hitter", "spin", "ps_stuff"):
+        for key in ("ivb", "hb_pitcher", "hb_hitter", "spin", "ps_stuff", "movement_n", "movement_usage", "movement_season", "movement_level"):
             if src.get(key) is not None:
                 pitch[key] = src[key]
         if pitch.get("velo") in (None, 0) and src.get("velo"):
@@ -150,13 +150,15 @@ def apply_to_row(row: dict, pack: dict) -> bool:
         pitch["code"] = pitch.get("code") or code
         pitch["type"] = pitch.get("type") or code
         changed = True
-    for code, src in incoming.items():
-        if code in seen:
-            continue
-        if arsenal and (src.get("usage") or 0) < 3 and (src.get("pitches") or 0) < 20:
-            continue
-        arsenal.append(dict(src))
-        changed = True
+    # A Mexican League mix stays the mix. Career shapes only fill an empty arsenal.
+    if not arsenal:
+        for code, src in incoming.items():
+            if code in seen:
+                continue
+            if (src.get("usage") or 0) < 3 and (src.get("pitches") or 0) < 20:
+                continue
+            arsenal.append(dict(src))
+            changed = True
     if not changed:
         return False
     row["arsenal"] = arsenal
