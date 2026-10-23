@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Free Agent Pool — Dorados de Chihuahua</title>
+<link rel="icon" href="assets/dorados-logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css?v=san7">
+</head>
+<body>
+<div class="topbar">
+  <a class="brand" href="index.html">
+    <img src="assets/dorados-logo.svg" alt="Dorados de Chihuahua">
+    <div>
+      <strong>Dorados de Chihuahua</strong>
+      <span data-i18n="brandSubFA">Analytics · Free Agent Pool</span>
+    </div>
+  </a>
+  <nav class="top-links">
+    <a href="index.html" data-i18n="navStats">Stats</a>
+    <a href="pregame.html" data-i18n="navPregame">Pregame Analytics</a>
+    <a class="active" href="free_agent_pool.html" data-i18n="navFA">Free Agent Pool</a>
+  </nav>
+  <div class="lang-toggle" aria-label="Language">
+    <button type="button" data-lang="en" data-i18n="langEn" onclick="setLang('en')">English</button>
+    <button type="button" data-lang="es" data-i18n="langEs" onclick="setLang('es')">Español</button>
+  </div>
+</div>
+
+<header class="hero">
+  <img src="assets/dorados-logo.svg" alt="Dorados de Chihuahua logo">
+  <h1 data-i18n="heroFA">Free Agent Pool</h1>
+  <p data-i18n="tagline">Dorados Advance Scouting creado por Colby Morris</p>
+  <p style="margin-top:8px;color:#b8c7dc;font-size:12px" data-i18n="heroFASub">MiLB 2026 · AA / AAA / Mexico · DR / Venezuela born excluded · Stuff+</p>
+</header>
+
+<main class="page">
+  <div class="tab-bar">
+    <button class="tab active" data-tab="pitchers" onclick="switchTab('pitchers')" data-i18n="pitchers">Pitchers</button>
+    <button class="tab" data-tab="hitters" onclick="switchTab('hitters')" data-i18n="hitters">Hitters</button>
+  </div>
+
+  <div class="banner" id="meta-note">Loading…</div>
+  <div class="filters">
+    <div class="filter-field">
+      <label data-i18n="search">Search</label>
+      <input id="search" placeholder="Name / team" oninput="render()">
+    </div>
+    <div class="filter-field">
+      <label data-i18n="level">Level</label>
+      <select id="level" onchange="render()">
+        <option value="all" selected>All</option>
+        <option value="AAA">AAA only</option>
+        <option value="AA">AA only</option>
+        <option value="MEX">Mexico only</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="loading" class="loading">Fetching free agent pool…</div>
+  <div id="panel-pitchers" class="panel active">
+    <div class="table-wrap">
+      <table id="tbl-p"><thead><tr>
+        <th onclick="sortTbl('tbl-p',0)">Name</th>
+        <th onclick="sortTbl('tbl-p',1)">Team</th>
+        <th class="num" onclick="sortTbl('tbl-p',2)">Lvl</th>
+        <th class="num" onclick="sortTbl('tbl-p',3)">IP</th>
+        <th class="num" onclick="sortTbl('tbl-p',4)">Strike%</th>
+        <th class="num" onclick="sortTbl('tbl-p',5)">K%</th>
+        <th class="num" onclick="sortTbl('tbl-p',6)">BB%</th>
+        <th class="num" onclick="sortTbl('tbl-p',7)">K-BB%</th>
+        <th class="num" onclick="sortTbl('tbl-p',8)">Whiff%</th>
+        <th class="num" onclick="sortTbl('tbl-p',9)">Stuff+</th>
+        <th class="num" onclick="sortTbl('tbl-p',10)">ERA</th>
+        <th class="num" onclick="sortTbl('tbl-p',11)">WHIP</th>
+        <th class="num" onclick="sortTbl('tbl-p',12)">MLB Days</th>
+        <th class="num" onclick="sortTbl('tbl-p',13)">Intl</th>
+        <th onclick="sortTbl('tbl-p',14)">Birth</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+  <div id="panel-hitters" class="panel">
+    <div class="table-wrap">
+      <table id="tbl-h"><thead><tr>
+        <th onclick="sortTbl('tbl-h',0)">Name</th>
+        <th onclick="sortTbl('tbl-h',1)">Team</th>
+        <th class="num" onclick="sortTbl('tbl-h',2)">Lvl</th>
+        <th class="num" onclick="sortTbl('tbl-h',3)">PA</th>
+        <th class="num" onclick="sortTbl('tbl-h',4)">AVG</th>
+        <th class="num" onclick="sortTbl('tbl-h',5)">OPS</th>
+        <th class="num" onclick="sortTbl('tbl-h',6)">ISO</th>
+        <th class="num" onclick="sortTbl('tbl-h',7)">BB%</th>
+        <th class="num" onclick="sortTbl('tbl-h',8)">K%</th>
+        <th class="num" onclick="sortTbl('tbl-h',9)">SwStr%</th>
+        <th class="num" onclick="sortTbl('tbl-h',10)">FPS%</th>
+        <th class="num" onclick="sortTbl('tbl-h',11)">FPS% RISP</th>
+        <th class="num" onclick="sortTbl('tbl-h',12)">MLB Days</th>
+        <th class="num" onclick="sortTbl('tbl-h',13)">Intl</th>
+        <th onclick="sortTbl('tbl-h',14)">Birth</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+</main>
+<script src="i18n.js"></script>
+<script>
+let DATA = null, FPS = {}, FPS_AVG = { fps: 0.28, fpsRisp: 0.28 }, sortState = {}, tab = 'pitchers';
+const pct = v => v == null ? '—' : (v*100).toFixed(1)+'%';
+const dec = (v,d=3) => v == null ? '—' : Number(v).toFixed(d);
+function fpsFor(id) {
+  const row = FPS[String(id)];
+  if (!row?.seasons) return { fps: null, fpsRisp: null };
+  for (const y of ['2026','2025']) {
+    if (row.seasons[y]?.fps_pct != null) {
+      return { fps: row.seasons[y].fps_pct, fpsRisp: row.seasons[y].fps_risp_pct };
+    }
+  }
+  return { fps: null, fpsRisp: null };
+}
+function computeFpsAvgs() {
+  const fpsVals = [], rispVals = [];
+  Object.values(FPS || {}).forEach(row => {
+    const seasons = row.seasons || {};
+    for (const y of ['2025','2026']) {
+      if (seasons[y]?.fps_pct != null) fpsVals.push(seasons[y].fps_pct);
+      if (seasons[y]?.fps_risp_pct != null) rispVals.push(seasons[y].fps_risp_pct);
+    }
+  });
+  if (fpsVals.length) FPS_AVG.fps = fpsVals.reduce((a,b)=>a+b,0) / fpsVals.length;
+  if (rispVals.length) FPS_AVG.fpsRisp = rispVals.reduce((a,b)=>a+b,0) / rispVals.length;
+}
+function fpsCls(v, avg) {
+  if (v == null || avg == null) return '';
+  if (v > avg) return 'high';
+  if (v < avg) return 'low';
+  return '';
+}
+function switchTab(name) {
+  tab = name;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab===name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id===`panel-${name}`));
+}
+function filt(rows) {
+  const q = (document.getElementById('search').value || '').toLowerCase();
+  const lvl = document.getElementById('level').value;
+  return rows.filter(r => {
+    if (lvl !== 'all' && r.level !== lvl) return false;
+    if (!q) return true;
+    return `${r.name} ${r.team} ${r.birth_country}`.toLowerCase().includes(q);
+  });
+}
+function render() {
+  if (!DATA) return;
+  const pits = filt(DATA.pitchers);
+  const hits = filt(DATA.hitters);
+  document.querySelector('#tbl-p tbody').innerHTML = pits.map(p => `<tr>
+    <td class="player-name">${p.name}<span class="tag">${p.level}</span></td>
+    <td>${p.team||'—'}</td><td class="num">${p.level}</td>
+    <td class="num">${p.ip??'—'}</td>
+    <td class="num">${pct(p.strike_pct)}</td>
+    <td class="num">${pct(p.k_pct)}</td>
+    <td class="num">${pct(p.bb_pct)}</td>
+    <td class="num">${pct(p.k_bb_pct)}</td>
+    <td class="num">${pct(p.swstr)}</td>
+    <td class="num ${p.stuff_plus!=null?(p.stuff_plus>=105?'good':p.stuff_plus<=90?'low':''):''}">${p.stuff_plus??'—'}</td>
+    <td class="num">${p.era!=null?Number(p.era).toFixed(2):'—'}</td>
+    <td class="num">${p.whip!=null?Number(p.whip).toFixed(2):'—'}</td>
+    <td class="num">${p.mlb_service_days??0}</td>
+    <td class="num">${p.international?'Y':'N'}</td>
+    <td>${p.birth_country||'—'}</td>
+  </tr>`).join('');
+  document.querySelector('#tbl-h tbody').innerHTML = hits.map(h => {
+    const f = fpsFor(h.mlbam_id);
+    return `<tr>
+    <td class="player-name">${h.name}<span class="tag">${h.level}</span></td>
+    <td>${h.team||'—'}</td><td class="num">${h.level}</td>
+    <td class="num">${h.pa??'—'}</td>
+    <td class="num">${dec(h.avg)}</td>
+    <td class="num">${dec(h.ops)}</td>
+    <td class="num">${dec(h.iso)}</td>
+    <td class="num">${pct(h.bb_pct)}</td>
+    <td class="num">${pct(h.k_pct)}</td>
+    <td class="num">${pct(h.swstr)}</td>
+    <td class="num ${fpsCls(f.fps, FPS_AVG.fps)}">${pct(f.fps)}</td>
+    <td class="num ${fpsCls(f.fpsRisp, FPS_AVG.fpsRisp)}">${pct(f.fpsRisp)}</td>
+    <td class="num">${h.mlb_service_days??0}</td>
+    <td class="num">${h.international?'Y':'N'}</td>
+    <td>${h.birth_country||'—'}</td>
+  </tr>`;
+  }).join('');
+}
+function sortTbl(id, col) {
+  const key = id+col; sortState[key]=!sortState[key]; const asc=sortState[key];
+  const tbody=document.querySelector('#'+id+' tbody');
+  const rows=[...tbody.rows].sort((a,b)=>{
+    const av=a.cells[col].textContent.replace('%','').trim();
+    const bv=b.cells[col].textContent.replace('%','').trim();
+    const an=parseFloat(av), bn=parseFloat(bv);
+    if (!isNaN(an)&&!isNaN(bn)) return asc?an-bn:bn-an;
+    return asc?av.localeCompare(bv):bv.localeCompare(av);
+  });
+  document.querySelectorAll('#'+id+' thead th').forEach((th,i)=>th.classList.toggle('sorted',i===col));
+  rows.forEach(r=>tbody.appendChild(r));
+}
+Promise.all([
+  fetch('data/free_agent_pool.json').then(r=>r.json()),
+  fetch('data/fps_cache.json').then(r=>r.json()).catch(()=>({})),
+]).then(([d, fps])=>{
+  DATA=d; FPS=fps;
+  computeFpsAvgs();
+  document.getElementById('loading').style.display='none';
+  document.getElementById('meta-note').textContent =
+    `Season ${d.season} · ${d.pitchers.length} pitchers · ${d.hitters.length} hitters · Excluded: ${(d.excluded_birth_countries||[]).join(', ')} · Generated ${d.generated||''}`;
+  applyI18n();
+  render();
+}).catch(e=>{
+  document.getElementById('loading').textContent='Failed: '+e.message;
+});
+document.addEventListener('santurce:lang', () => applyI18n());
+</script>
+</body>
+</html>

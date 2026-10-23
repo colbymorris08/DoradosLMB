@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dorados de Chihuahua — Player Stats</title>
+<link rel="icon" href="assets/dorados-logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css?v=dor1">
+<style>
+  .mode-tabs {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--line); margin-bottom: 16px; padding: 4px 0 12px;
+  }
+  .mode-tabs button {
+    appearance: none;
+    background: var(--panel); border: 1px solid var(--line-strong); border-radius: 9px;
+    font: inherit; font-size: 13px; font-weight: 700; color: #c5d0e0;
+    padding: 9px 13px; cursor: pointer; letter-spacing: 0.02em;
+    box-shadow: var(--shadow-soft);
+    transition: background .15s ease, color .15s ease, border-color .15s ease, transform .12s ease, box-shadow .15s ease;
+  }
+  .mode-tabs button:hover {
+    background: var(--panel-hover); color: #fff; border-color: #6a82a4;
+    transform: translateY(-1px); box-shadow: var(--shadow);
+  }
+  .mode-tabs button.active {
+    background: linear-gradient(180deg, #1e3d72 0%, #152f5a 100%);
+    color: #fff; border-color: var(--santurce-gold);
+    box-shadow: 0 0 0 1px rgba(230, 195, 92, 0.35), var(--shadow);
+  }
+  .filter-toolbar {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;
+    justify-content: space-between; margin-bottom: 8px;
+  }
+  .filter-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; flex: 1; }
+  .filter-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .reset {
+    color: var(--link); font-size: 13px; font-weight: 600; cursor: pointer;
+    background: none; border: none; font-family: inherit;
+  }
+  .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow-soft); }
+  .seg button {
+    border: none; background: var(--panel); font: inherit; font-size: 13px; font-weight: 600;
+    padding: 8px 14px; cursor: pointer; color: var(--muted);
+    transition: background .15s ease, color .15s ease;
+  }
+  .seg button:hover { background: var(--panel-hover); color: #fff; }
+  .seg button.active { background: #1e3d72; color: #fff; }
+  .statcast-btn {
+    border: 1px solid var(--line-strong); color: var(--link); background: var(--panel);
+    border-radius: 8px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 700;
+    cursor: pointer; box-shadow: var(--shadow-soft);
+    transition: background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .statcast-btn:hover { border-color: var(--santurce-gold); color: #fff; }
+  .statcast-btn.active { background: #1e3d72; color: #fff; border-color: var(--santurce-gold); }
+  .subnav { display: flex; gap: 8px; margin: 8px 0 16px; flex-wrap: wrap; }
+  .subnav button {
+    font: inherit; font-size: 13px; font-weight: 600; color: #c5d0e0;
+    background: var(--panel); border: 1px solid var(--line-strong); border-radius: 9px;
+    padding: 7px 12px; cursor: pointer; box-shadow: var(--shadow-soft);
+    transition: background .15s ease, color .15s ease, border-color .15s ease, transform .12s ease;
+  }
+  .subnav button:hover {
+    background: var(--panel-hover); color: #fff; border-color: #6a82a4; transform: translateY(-1px);
+  }
+  .subnav button.active {
+    background: linear-gradient(180deg, #1e3d72 0%, #152f5a 100%);
+    color: #fff; border-color: var(--santurce-gold);
+  }
+  #roster-panel { display: none; }
+  #roster-panel.active { display: block; }
+  #stats-panel.hidden { display: none; }
+  .roster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+  .roster-card {
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--panel);
+    box-shadow: var(--shadow-soft);
+  }
+  .roster-card h3 { font-size: 14px; color: var(--santurce-gold); margin-bottom: 8px; }
+  .roster-card.santurce { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(233,102,57,0.35), var(--shadow-soft); }
+  .roster-card td { border-bottom: 1px solid #243348; padding: 7px 6px; }
+  .pos-tag { font-weight: 500; color: var(--muted); font-size: 12px; margin-left: 6px; }
+  tbody td.sorted-col { background: rgba(110,168,255,0.08); }
+  .rank { color: var(--muted); width: 36px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="brand" href="index.html">
+    <img src="assets/dorados-logo.svg" alt="Dorados de Chihuahua">
+    <div>
+      <strong>Dorados de Chihuahua</strong>
+      <span data-i18n="brandSub">Analytics · Puerto Rico / MLB / MiLB</span>
+    </div>
+  </a>
+  <nav class="top-links">
+    <a class="active" href="index.html" data-i18n="navStats">Stats</a>
+    <a href="pregame.html" data-i18n="navPregame">Pregame Analytics</a>
+    <a href="free_agent_pool.html" data-i18n="navFA">Free Agent Pool</a>
+  </nav>
+  <div class="lang-toggle" aria-label="Language">
+    <button type="button" data-lang="en" data-i18n="langEn" onclick="setLang('en')">English</button>
+    <button type="button" data-lang="es" data-i18n="langEs" onclick="setLang('es')">Español</button>
+  </div>
+</div>
+
+<header class="hero">
+  <img src="assets/dorados-logo.svg" alt="Dorados de Chihuahua logo">
+  <h1 data-i18n="heroStats">Dorados de Chihuahua Player Stats</h1>
+  <p data-i18n="tagline">Dorados Advance Scouting creado por Colby Morris</p>
+</header>
+
+<main class="page">
+  <div class="subnav">
+    <button type="button" class="active" id="btn-stats" onclick="showSection('stats')" data-i18n="btnStats">Player Stats</button>
+    <button type="button" id="btn-rosters" onclick="showSection('rosters')" data-i18n="btnRosters">LBPRC Rosters</button>
+  </div>
+
+  <div id="stats-panel">
+    <div class="mode-tabs">
+      <button type="button" class="active" data-mode="hitting" onclick="setMode('hitting')" data-i18n="hitting">Hitting</button>
+      <button type="button" data-mode="pitching" onclick="setMode('pitching')" data-i18n="pitching">Pitching</button>
+    </div>
+
+    <div class="filter-toolbar">
+      <div class="filter-row">
+        <div class="filter-field">
+          <label data-i18n="lbprcTeam">LMB Team</label>
+          <select id="f-team" onchange="onTeamChange()">
+          <option value="all">All Teams</option>
+</select>
+        </div>
+        <div class="filter-field">
+          <label data-i18n="level">Level</label>
+          <select id="f-level" onchange="onFilterChange()">
+            <option value="MEX" selected>LMB</option>
+          </select>
+        </div>
+        <div class="filter-field">
+          <label data-i18n="year">Year</label>
+          <select id="f-year" onchange="onYearChange()">
+            <option value="2026" selected>2026</option>
+          </select>
+        </div>
+        <div class="filter-field">
+          <label data-i18n="positions">Positions</label>
+          <select id="f-pos" onchange="renderTable()">
+            <option value="all" data-i18n="allPositions">All Positions</option>
+            <option value="C">C</option>
+            <option value="1B">1B</option>
+            <option value="2B">2B</option>
+            <option value="3B">3B</option>
+            <option value="SS">SS</option>
+            <option value="LF">LF</option>
+            <option value="CF">CF</option>
+            <option value="RF">RF</option>
+            <option value="OF">OF (LF/CF/RF)</option>
+            <option value="DH">DH</option>
+            <option value="P">P</option>
+          </select>
+        </div>
+        <div class="filter-field">
+          <label data-i18n="timeRange">Time Range</label>
+          <select id="f-time" onchange="onFilterChange()">
+            <option value="2026_season" selected>2026 summer</option>
+          </select>
+        </div>
+      </div>
+      <div class="filter-actions">
+        <button type="button" class="reset" onclick="resetFilters()" data-i18n="reset">Reset Filters</button>
+        <div class="seg">
+          <button type="button" class="active" id="view-std" onclick="setView('standard')" data-i18n="standard">Standard</button>
+          <button type="button" id="view-exp" onclick="setView('expanded')" data-i18n="expanded">Expanded</button>
+        </div>
+        <button type="button" class="statcast-btn" id="btn-stuff" onclick="toggleStuffView()" data-i18n="stuffPlus">Stuff+</button>
+      </div>
+    </div>
+
+    <div class="banner" id="data-banner">Loading…</div>
+    <div class="legend-row" id="stats-color-key" data-i18n-html="colorKeyGreenBlue">
+      <span class="swatch"><span class="txt-good">● High</span> above avg / Stuff+ ≥ 105</span>
+      <span class="swatch"><span class="txt-low">● Low</span> below avg / Stuff+ ≤ 90</span>
+    </div>
+    <div id="loading" class="loading">Loading stats…</div>
+    <div class="table-wrap" id="table-wrap" style="display:none">
+      <table id="stats-table"><thead></thead><tbody></tbody></table>
+      <div class="empty" id="empty" style="display:none">No players match these filters.</div>
+    </div>
+  </div>
+
+  <div id="roster-panel">
+    <div class="banner" data-i18n="rosterBanner">LMB 2026 summer rosters. Every player who appeared in the Mexican League season. Team filter syncs with Player Stats.</div>
+    <div class="filter-field" style="max-width:320px;margin-bottom:12px">
+      <label data-i18n="lbprcTeam">LMB Team</label>
+      <select id="roster-team" onchange="onRosterTeamChange()">
+          <option value="all">All Teams</option>
+</select>
+    </div>
+    <div id="roster-grid" class="roster-grid"></div>
+  </div>
+</main>
+
+<script src="lmb_teams.js?v=dor1"></script>
+<script src="i18n.js?v=dor1"></script>
+<script>
+const TEAM_META = Object.fromEntries(LMB_TEAMS.map((t) => [String(t.id), { abbrev: t.abbrev, name: t.name }]));
+const ABBREV_TO_ID = Object.fromEntries(LMB_TEAMS.map((t) => [t.abbrev, String(t.id)]));
+function fillIndexTeams() {
+  const names = '<option value="all">All Teams</option>' + LMB_TEAMS.map((t) => `<option value="${t.abbrev}">${t.name}</option>`).join('');
+  const roster = '<option value="all">All Teams</option>' + LMB_TEAMS.map((t) => `<option value="${t.id}">${t.name}</option>`).join('');
+  const teamSel = document.getElementById('f-team');
+  const rosterSel = document.getElementById('roster-team');
+  if (teamSel) teamSel.innerHTML = names;
+  if (rosterSel) rosterSel.innerHTML = roster;
+}
+fillIndexTeams();
+const OF_POS = new Set(['LF','CF','RF','OF']);
+
+let mode = 'hitting';
+let view = 'standard';
+let stuffView = false;
+let sortCol = null;
+let sortAsc = false;
+let DATA = { lbprcH: [], lbprcP: [], mlbH: [], mlbP: [], milbH: [], milbP: [], mexH: [], mexP: [], rosters: {}, stuff: {}, fps: {} };
+let FPS_AVG = { fps: 0.28, fpsRisp: 0.28 };
+
+function computeFpsAvgs() {
+  const fpsVals = [], rispVals = [];
+  Object.values(DATA.fps || {}).forEach(row => {
+    const seasons = row.seasons || {};
+    for (const y of ['2025','2026']) {
+      if (seasons[y]?.fps_pct != null) fpsVals.push(seasons[y].fps_pct);
+      if (seasons[y]?.fps_risp_pct != null) rispVals.push(seasons[y].fps_risp_pct);
+    }
+  });
+  if (fpsVals.length) FPS_AVG.fps = fpsVals.reduce((a,b)=>a+b,0) / fpsVals.length;
+  if (rispVals.length) FPS_AVG.fpsRisp = rispVals.reduce((a,b)=>a+b,0) / rispVals.length;
+}
+
+function num(v) {
+  if (v == null || v === '' || v === '.---' || v === '-.--') return null;
+  if (typeof v === 'number') return v;
+  const s = String(v).replace(',', '').trim();
+  const n = parseFloat(s.startsWith('.') ? '0' + s : s);
+  return Number.isFinite(n) ? n : null;
+}
+function pct(v) { return v == null ? '—' : (v * 100).toFixed(1); }
+function dec(v, d=3) { return v == null ? '—' : Number(v).toFixed(d); }
+function ipNum(v) {
+  if (v == null) return null;
+  if (typeof v === 'number') return v;
+  const s = String(v).trim();
+  if (!s || s === '.---') return null;
+  if (s.includes('.')) {
+    const [w, f] = s.split('.');
+    return parseInt(w, 10) + (parseInt(f, 10) / 3);
+  }
+  return parseFloat(s);
+}
+
+function fpsFor(pid, preferYear) {
+  const row = DATA.fps[String(pid)];
+  if (!row || !row.seasons) return { fps: null, fpsRisp: null };
+  const seasons = row.seasons;
+  const order = preferYear ? [String(preferYear), '2026', '2025'] : ['2026', '2025'];
+  for (const y of order) {
+    if (seasons[y] && seasons[y].fps_pct != null) {
+      return { fps: seasons[y].fps_pct, fpsRisp: seasons[y].fps_risp_pct };
+    }
+  }
+  return { fps: null, fpsRisp: null };
+}
+
+function showSection(which) {
+  document.getElementById('stats-panel').classList.toggle('hidden', which !== 'stats');
+  document.getElementById('roster-panel').classList.toggle('active', which === 'rosters');
+  document.getElementById('btn-stats').classList.toggle('active', which === 'stats');
+  document.getElementById('btn-rosters').classList.toggle('active', which === 'rosters');
+  if (which === 'rosters') {
+    syncRosterFromStatsTeam();
+    renderRosters();
+  }
+}
+
+function setMode(m) {
+  mode = m;
+  stuffView = false;
+  document.getElementById('btn-stuff').classList.toggle('active', false);
+  document.querySelectorAll('.mode-tabs button').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+  sortCol = null;
+  renderTable();
+}
+function setView(v) {
+  view = v;
+  document.getElementById('view-std').classList.toggle('active', v === 'standard');
+  document.getElementById('view-exp').classList.toggle('active', v === 'expanded');
+  renderTable();
+}
+function toggleStuffView() {
+  if (mode !== 'pitching') setMode('pitching');
+  stuffView = !stuffView;
+  document.getElementById('btn-stuff').classList.toggle('active', stuffView);
+  renderTable();
+}
+
+function resetFilters() {
+  document.getElementById('f-team').value = 'all';
+  document.getElementById('f-level').value = 'MEX';
+  document.getElementById('f-year').value = '2026';
+  document.getElementById('f-pos').value = 'all';
+  document.getElementById('f-time').value = '2026_season';
+  stuffView = false;
+  document.getElementById('btn-stuff').classList.remove('active');
+  syncRosterFromStatsTeam();
+  onFilterChange();
+}
+
+function onTeamChange() {
+  syncRosterFromStatsTeam();
+  updateBanner();
+  renderTable();
+  if (document.getElementById('roster-panel').classList.contains('active')) renderRosters();
+}
+
+function onRosterTeamChange() {
+  const rid = document.getElementById('roster-team').value;
+  if (rid === 'all') document.getElementById('f-team').value = 'all';
+  else {
+    const ab = TEAM_META[rid]?.abbrev;
+    if (ab) document.getElementById('f-team').value = ab;
+  }
+  renderRosters();
+}
+
+function syncRosterFromStatsTeam() {
+  const ab = document.getElementById('f-team').value;
+  const sel = document.getElementById('roster-team');
+  if (!sel.options.length) return;
+  sel.value = ab === 'all' ? 'all' : (ABBREV_TO_ID[ab] || 'all');
+}
+
+function onYearChange() {
+  const year = document.getElementById('f-year').value;
+  // Selecting 2026 must surface MLB / MiLB (and Mexico) — leave Level=All if it was LBPRC-only.
+  if (year === '2026') {
+    const lvl = document.getElementById('f-level').value;
+    if (lvl === 'LBPRC') document.getElementById('f-level').value = 'all';
+    document.getElementById('f-time').value = '2026_season';
+  } else if (year === '2025') {
+    document.getElementById('f-time').value = 'lbprc_2025_season';
+  }
+  onFilterChange();
+}
+
+function onFilterChange() {
+  // Sync Year from Time Range when user picks an explicit season bucket.
+  const time = document.getElementById('f-time').value;
+  const yearSel = document.getElementById('f-year');
+  if (time === '2026_season') yearSel.value = '2026';
+  syncRosterFromStatsTeam();
+  updateBanner();
+  renderTable();
+}
+
+function selectedLevels() {
+  const level = document.getElementById('f-level').value;
+  if (level === 'all') return ['LBPRC', 'MEX', 'MiLB', 'MLB'];
+  if (level === 'MiLB_MLB') return ['MiLB', 'MLB'];
+  if (level === 'MEX') return ['MEX'];
+  if (level === 'LBPRC') return ['LBPRC'];
+  if (level === 'MLB') return ['MLB'];
+  if (level === 'MiLB') return ['MiLB'];
+  return ['LBPRC', 'MEX', 'MiLB', 'MLB'];
+}
+
+function selectedYear() {
+  return document.getElementById('f-year')?.value || 'all';
+}
+
+function preferredFpsYear() {
+  const year = selectedYear();
+  if (year === '2026') return 2026;
+  if (year === '2025') return 2025;
+  const time = document.getElementById('f-time').value;
+  if (time === '2026_season' || time === 'lbprc_2026_season') return 2026;
+  return 2025;
+}
+
+function timeRangeLabel() {
+  const time = document.getElementById('f-time').value;
+  return {
+    from_oct_2025: 'Oct 2025 onwards',
+    '2026_season': '2026 whole season',
+    lbprc_2025_season: 'LBPRC 2025 whole season',
+    lbprc_2025_oct: 'LBPRC 2025 October',
+    lbprc_2025_nov: 'LBPRC 2025 November',
+    lbprc_2025_dec: 'LBPRC 2025 December',
+    lbprc_2025_jan: 'LBPRC 2025 January',
+    lbprc_2026_season: 'LBPRC 2026 whole season (not yet populated)',
+  }[time] || time;
+}
+
+function updateBanner() {
+  const levels = selectedLevels();
+  const year = selectedYear();
+  const time = document.getElementById('f-time').value;
+  const team = document.getElementById('f-team').value;
+  const tr = timeRangeLabel();
+  const label = document.getElementById('f-level').selectedOptions[0]?.textContent || levels.join(' / ');
+  let msg = `Level: <strong>${label}</strong> · Year: <strong>${year === 'all' ? 'All' : year}</strong> · Time: <strong>${tr}</strong>.`;
+  const wantLBPRC = levels.includes('LBPRC') && year !== '2026';
+  const wantMex = levels.includes('MEX') && year !== '2025';
+  const wantMlb = (levels.includes('MLB') || levels.includes('MiLB')) && year !== '2025';
+  if (wantLBPRC) {
+    const teamLabel = team === 'all' ? 'all LBPRC teams' : (Object.values(TEAM_META).find(t => t.abbrev === team)?.name || team);
+    if (time === 'lbprc_2026_season') {
+      msg += ` LBPRC 2026 not populated yet — using <strong>2025 LBPRC</strong> (${teamLabel}) as stand-in.`;
+    } else {
+      msg += ` LBPRC = <strong>2025</strong> (${teamLabel}).`;
+    }
+  }
+  if (wantMex) msg += ` Mexico = <strong>2026 Liga Mexicana</strong>.`;
+  if (wantMlb) msg += ` MLB/MiLB = <strong>2026</strong> season.`;
+  if (year === '2026' && levels.includes('LBPRC') && !wantLBPRC) {
+    msg += ` LBPRC omitted for Year 2026 (winter 2026 not populated).`;
+  }
+  document.getElementById('data-banner').innerHTML = msg;
+}
+
+function normalizeHit(s, levelHint) {
+  const pa = num(s.plateAppearances);
+  const so = num(s.strikeOuts) || 0;
+  const bb = num(s.baseOnBalls) || 0;
+  const fps = fpsFor(s.playerId, preferredFpsYear());
+  const lvl = levelHint === 'LMB' ? 'LMB' : (s._level || levelHint || '');
+  return {
+    id: s.playerId,
+    name: s.playerFullName || s.playerName,
+    team: s.teamAbbrev,
+    teamId: s.teamId,
+    pos: s.positionAbbrev || s.primaryPositionAbbrev || '',
+    level: lvl === 'AAA' || lvl === 'AA' ? lvl : (lvl || levelHint || ''),
+    year: String(s.year || s.season || ''),
+    g: num(s.gamesPlayed),
+    pa, ab: num(s.atBats), r: num(s.runs), h: num(s.hits),
+    doubles: num(s.doubles), triples: num(s.triples), hr: num(s.homeRuns), rbi: num(s.rbi),
+    bb, so, sb: num(s.stolenBases), cs: num(s.caughtStealing),
+    avg: num(s.avg), obp: num(s.obp), slg: num(s.slg), ops: num(s.ops),
+    iso: num(s.iso), babip: num(s.babip),
+    kPct: pa ? so / pa : num(s.strikeoutsPerPlateAppearance),
+    bbPct: pa ? bb / pa : num(s.walksPerPlateAppearance),
+    fps: fps.fps,
+    fpsRisp: fps.fpsRisp,
+  };
+}
+
+function normalizePit(s, levelHint) {
+  const bf = num(s.battersFaced);
+  const so = num(s.strikeOuts) || 0;
+  const bb = num(s.baseOnBalls) || 0;
+  const pid = s.playerId;
+  const st = DATA.stuff[String(pid)];
+  const lvl = levelHint === 'LMB' ? 'LMB' : (s._level || levelHint || '');
+  return {
+    id: pid,
+    name: s.playerFullName || s.playerName,
+    team: s.teamAbbrev,
+    teamId: s.teamId,
+    pos: 'P',
+    level: lvl === 'AAA' || lvl === 'AA' ? lvl : (lvl || levelHint || ''),
+    year: String(s.year || s.season || ''),
+    g: num(s.gamesPitched) || num(s.gamesPlayed),
+    gs: num(s.gamesStarted),
+    ip: s.inningsPitched,
+    ipN: ipNum(s.inningsPitched),
+    w: num(s.wins), l: num(s.losses), sv: num(s.saves),
+    h: num(s.hits), er: num(s.earnedRuns), bb, so, hr: num(s.homeRuns),
+    era: num(s.era), whip: num(s.whip),
+    k9: num(s.strikeoutsPer9Inn) || num(s.strikeoutsPer9),
+    bb9: num(s.walksPer9Inn) || num(s.baseOnBallsPer9),
+    avg: num(s.avg), babip: num(s.babip),
+    strikePct: num(s.strikePercentage),
+    whiff: num(s.whiffPercentage),
+    kPct: bf ? so / bf : null,
+    bbPct: bf ? bb / bf : null,
+    stuffPlus: st ? st.stuff_plus : null,
+    stuffSource: st ? st.source : null,
+  };
+}
+
+function currentPool() {
+  const levels = selectedLevels();
+  const year = selectedYear();
+  const out = [];
+  const want = (bucketYear) => year === 'all' || year === bucketYear;
+  if (mode === 'hitting') {
+    if (levels.includes('LBPRC') && want('2025')) out.push(...DATA.lbprcH.map(r => normalizeHit(r, 'LBPRC')));
+    if (levels.includes('MEX') && want('2026')) out.push(...DATA.mexH.map(r => normalizeHit(r, 'LMB')));
+    if (levels.includes('MLB') && want('2026')) out.push(...DATA.mlbH.map(r => normalizeHit(r, 'MLB')));
+    if (levels.includes('MiLB') && want('2026')) out.push(...DATA.milbH.map(r => normalizeHit(r, r._level || 'MiLB')));
+  } else {
+    if (levels.includes('LBPRC') && want('2025')) out.push(...DATA.lbprcP.map(r => normalizePit(r, 'LBPRC')));
+    if (levels.includes('MEX') && want('2026')) out.push(...DATA.mexP.map(r => normalizePit(r, 'LMB')));
+    if (levels.includes('MLB') && want('2026')) out.push(...DATA.mlbP.map(r => normalizePit(r, 'MLB')));
+    if (levels.includes('MiLB') && want('2026')) out.push(...DATA.milbP.map(r => normalizePit(r, r._level || 'MiLB')));
+  }
+  return out;
+}
+
+function minPaFor() { return 0; }
+function minIpFor() { return 0; }
+
+function applyFilters(rows) {
+  const team = document.getElementById('f-team').value;
+  const pos = document.getElementById('f-pos').value;
+  return rows.filter(r => {
+    // When a LBPRC team is selected, only that team's players (hide other levels/teams).
+    if (team !== 'all') {
+      if ((r.team || '') !== team) return false;
+    }
+    if (pos !== 'all') {
+      if (pos === 'OF') {
+        if (!OF_POS.has(r.pos)) return false;
+      } else if ((r.pos || '') !== pos) {
+        return false;
+      }
+    }
+    if (mode === 'hitting' && (r.pa || 0) < minPaFor(r.level)) return false;
+    if (mode === 'pitching' && (r.ipN || 0) < minIpFor(r.level)) return false;
+    return true;
+  });
+}
+
+function hitHeaders() {
+  const base = [
+    { key: 'rank', label: '', num: true },
+    { key: 'name', label: t('player') },
+    { key: 'team', label: t('team') },
+    { key: 'level', label: 'Lvl' },
+    { key: 'g', label: 'G', num: true },
+    { key: 'pa', label: 'PA', num: true },
+    { key: 'ab', label: 'AB', num: true },
+    { key: 'r', label: 'R', num: true },
+    { key: 'h', label: 'H', num: true },
+    { key: 'doubles', label: '2B', num: true },
+    { key: 'triples', label: '3B', num: true },
+    { key: 'hr', label: 'HR', num: true },
+    { key: 'rbi', label: 'RBI', num: true },
+    { key: 'bb', label: 'BB', num: true },
+    { key: 'so', label: 'SO', num: true },
+    { key: 'sb', label: 'SB', num: true },
+    { key: 'avg', label: 'AVG', num: true },
+    { key: 'obp', label: 'OBP', num: true },
+    { key: 'slg', label: 'SLG', num: true },
+    { key: 'ops', label: 'OPS', num: true },
+    { key: 'fps', label: 'FPS%', num: true },
+    { key: 'fpsRisp', label: 'FPS% RISP', num: true },
+  ];
+  if (view === 'expanded') {
+    base.push(
+      { key: 'iso', label: 'ISO', num: true },
+      { key: 'babip', label: 'BABIP', num: true },
+      { key: 'bbPct', label: 'BB%', num: true },
+      { key: 'kPct', label: 'K%', num: true },
+    );
+  }
+  return base;
+}
+
+function pitHeaders() {
+  if (stuffView) {
+    return [
+      { key: 'rank', label: '', num: true },
+      { key: 'name', label: t('player') },
+      { key: 'team', label: t('team') },
+      { key: 'level', label: 'Lvl' },
+      { key: 'ip', label: 'IP', num: true },
+      { key: 'strikePct', label: 'Strike%', num: true },
+      { key: 'whiff', label: 'Whiff%', num: true },
+      { key: 'stuffPlus', label: 'Stuff+', num: true },
+      { key: 'kPct', label: 'K%', num: true },
+      { key: 'bbPct', label: 'BB%', num: true },
+      { key: 'era', label: 'ERA', num: true },
+      { key: 'whip', label: 'WHIP', num: true },
+      { key: 'k9', label: 'K/9', num: true },
+    ];
+  }
+  const base = [
+    { key: 'rank', label: '', num: true },
+    { key: 'name', label: t('player') },
+    { key: 'team', label: t('team') },
+    { key: 'level', label: 'Lvl' },
+    { key: 'w', label: 'W', num: true },
+    { key: 'l', label: 'L', num: true },
+    { key: 'era', label: 'ERA', num: true },
+    { key: 'g', label: 'G', num: true },
+    { key: 'gs', label: 'GS', num: true },
+    { key: 'sv', label: 'SV', num: true },
+    { key: 'ip', label: 'IP', num: true },
+    { key: 'h', label: 'H', num: true },
+    { key: 'er', label: 'ER', num: true },
+    { key: 'bb', label: 'BB', num: true },
+    { key: 'so', label: 'SO', num: true },
+    { key: 'whip', label: 'WHIP', num: true },
+  ];
+  if (view === 'expanded') {
+    base.push(
+      { key: 'hr', label: 'HR', num: true },
+      { key: 'k9', label: 'K/9', num: true },
+      { key: 'bb9', label: 'BB/9', num: true },
+      { key: 'avg', label: 'AVG', num: true },
+      { key: 'babip', label: 'BABIP', num: true },
+      { key: 'stuffPlus', label: 'Stuff+', num: true },
+    );
+  }
+  return base;
+}
+
+function formatCell(key, r) {
+  if (key === 'rank') return '';
+  if (key === 'name') return `${r.name}<span class="pos-tag">${r.pos || ''}</span>`;
+  if (key === 'team') return r.team || '—';
+  if (key === 'level') return r.level || '—';
+  if (key === 'ip') return r.ip ?? '—';
+  if (['avg','obp','slg','ops','iso','babip'].includes(key)) return dec(r[key]);
+  if (['era','whip','k9','bb9'].includes(key)) return r[key] == null ? '—' : Number(r[key]).toFixed(2);
+  if (key === 'fps' || key === 'fpsRisp') {
+    if (r[key] == null) return '—';
+    const avg = key === 'fps' ? FPS_AVG.fps : FPS_AVG.fpsRisp;
+    const cls = r[key] > avg ? 'high' : (r[key] < avg ? 'low' : '');
+    return `<span class="${cls}">${pct(r[key])}</span>`;
+  }
+  if (['strikePct','whiff','kPct','bbPct'].includes(key)) return r[key] == null ? '—' : pct(r[key]);
+  if (key === 'stuffPlus') {
+    if (r.stuffPlus == null) return '—';
+    const cls = r.stuffPlus >= 105 ? 'good' : (r.stuffPlus <= 90 ? 'low' : '');
+    return `<span class="${cls}">${r.stuffPlus}</span>`;
+  }
+  const v = r[key];
+  return v == null ? '—' : v;
+}
+
+function defaultSortKey() {
+  if (mode === 'hitting') return 'ops';
+  if (stuffView) return 'stuffPlus';
+  return 'era';
+}
+
+function renderTable() {
+  const headers = mode === 'hitting' ? hitHeaders() : pitHeaders();
+  let rows = applyFilters(currentPool());
+  const key = sortCol || defaultSortKey();
+  const asc = sortCol ? sortAsc : (key === 'era' || key === 'whip' || key === 'bbPct' || key === 'bb9');
+  rows = rows.slice().sort((a, b) => {
+    let av = a[key]; let bv = b[key];
+    if (key === 'ip') { av = a.ipN; bv = b.ipN; }
+    if (key === 'name' || key === 'team' || key === 'level') {
+      return asc ? String(av||'').localeCompare(String(bv||'')) : String(bv||'').localeCompare(String(av||''));
+    }
+    av = av == null ? (asc ? Infinity : -Infinity) : Number(av);
+    bv = bv == null ? (asc ? Infinity : -Infinity) : Number(bv);
+    return asc ? av - bv : bv - av;
+  });
+
+  const thead = document.querySelector('#stats-table thead');
+  thead.innerHTML = '<tr>' + headers.map(h => {
+    const sorted = (sortCol || defaultSortKey()) === h.key;
+    return `<th class="${h.num?'num':''} ${sorted?'sorted':''}" onclick="sortBy('${h.key}')">${h.label}${sorted ? (asc ? ' ▲' : ' ▼') : ''}</th>`;
+  }).join('') + '</tr>';
+
+  const sortIdx = headers.findIndex(h => h.key === (sortCol || defaultSortKey()));
+  const tbody = document.querySelector('#stats-table tbody');
+  tbody.innerHTML = rows.map((r, idx) => '<tr>' + headers.map((h, i) => {
+    const cls = [
+      h.num ? 'num' : '',
+      h.key === 'rank' ? 'rank' : '',
+      h.key === 'name' ? 'player-cell' : '',
+      h.key === 'team' ? 'team-cell' : '',
+      i === sortIdx ? 'sorted-col' : '',
+    ].filter(Boolean).join(' ');
+    const val = h.key === 'rank' ? (idx + 1) : formatCell(h.key, r);
+    return `<td class="${cls}">${val}</td>`;
+  }).join('') + '</tr>').join('');
+
+  document.getElementById('empty').style.display = rows.length ? 'none' : 'block';
+  document.getElementById('table-wrap').style.display = 'block';
+  document.getElementById('loading').style.display = 'none';
+}
+
+function sortBy(key) {
+  if (sortCol === key) sortAsc = !sortAsc;
+  else {
+    sortCol = key;
+    sortAsc = (key === 'era' || key === 'whip' || key === 'name' || key === 'team');
+  }
+  renderTable();
+}
+
+function renderRosters() {
+  const filter = document.getElementById('roster-team').value;
+  const ids = filter === 'all' ? Object.keys(DATA.rosters) : [filter];
+  document.getElementById('roster-grid').innerHTML = ids.map(id => {
+    const t = DATA.rosters[id];
+    if (!t) return '';
+    const rows = (t.players || []).slice().sort((a,b) => {
+      const pa = a.position === 'P' ? 1 : 0, pb = b.position === 'P' ? 1 : 0;
+      if (pa !== pb) return pa - pb;
+      return (a.name || '').localeCompare(b.name || '');
+    }).map(p => `<tr><td>${p.jersey||'—'}</td><td class="player-cell">${p.name||'—'}</td><td>${p.position||'—'}</td></tr>`).join('');
+    return `<div class="roster-card ${id==='575'?'dorados':''}"><h3>${t.teamName} · ${t.players.length}</h3>
+      <table><thead><tr><th>#</th><th>Name</th><th>Pos</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }).join('');
+}
+
+async function loadAll() {
+  try {
+    const [mexH, mexP, rosters, fps] = await Promise.all([
+      fetch('data/mexico_2026_hitting.json').then(r => r.json()),
+      fetch('data/mexico_2026_pitching.json').then(r => r.json()),
+      fetch('data/lmb_2026_rosters.json').then(r => r.json()),
+      fetch('data/fps_cache.json').then(r => r.json()).catch(() => ({})),
+    ]);
+    DATA = { lbprcH: [], lbprcP: [], mlbH: [], mlbP: [], milbH: [], milbP: [], mexH, mexP, rosters, stuff: {}, fps };
+    computeFpsAvgs();
+    fillIndexTeams();
+    syncRosterFromStatsTeam();
+    updateBanner();
+    renderTable();
+  } catch (e) {
+    document.getElementById('loading').textContent = 'Failed to load data: ' + e.message;
+  }
+}
+
+loadAll();
+document.addEventListener('santurce:lang', () => { applyI18n(); renderTable(); if (document.getElementById('roster-panel').classList.contains('active')) renderRosters(); });
+</script>
+</body>
+</html>
