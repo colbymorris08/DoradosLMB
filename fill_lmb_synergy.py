@@ -378,7 +378,12 @@ def reapply_savant(row: dict) -> None:
 def write_outputs(by_id: dict[int, dict]) -> None:
     arsenals = load_json(DATA / "pregame_pitcher_arsenals.json")
     hitters = load_json(DATA / "advance_opposing_hitters.json")
-    heat = {"updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "source": "Synergy LMB 2026 px/pz", "hitters": {}, "pitchers": {}}
+    heat_path = DATA / "advance_heatmaps.json"
+    heat = load_json(heat_path) if heat_path.is_file() else {}
+    heat["updated"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    heat["source"] = "Synergy LMB 2026 px/pz"
+    heat.setdefault("hitters", {})
+    heat.setdefault("pitchers", {})
     spray_rows = []
     ars_by = {int(r["player_id"]): r for r in arsenals.get("pitchers") or []}
     hit_by = {int(r["mlb_id"]): r for r in hitters.get("hitters") or [] if r.get("mlb_id")}
@@ -465,6 +470,9 @@ def main() -> int:
     ckpt = load_json(CKPT) if CKPT.is_file() else {"done": {}}
     syn = Synergy()
     players = sorted(by_id.values(), key=lambda p: (p["team"], p["role"], p["name"]))
+    only_teams = {t.strip() for t in os.environ.get("LMB_SYNERGY_TEAMS", "").split(",") if t.strip()}
+    if only_teams:
+        players = [p for p in players if p["team"] in only_teams]
     limit = int(os.environ.get("LMB_SYNERGY_LIMIT", "0") or "0")
     if limit:
         players = players[:limit]

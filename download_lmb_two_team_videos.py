@@ -30,8 +30,8 @@ from refresh_roster_synergy import Synergy  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent
 OUT = Path.home() / "Downloads" / "LMB video"
-CKPT = ROOT / "runs" / "lmb_two_team_video_checkpoint.json"
-TEAMS = {"MEX", "TIJ"}
+CKPT = Path(os.environ.get("LMB_VIDEO_CKPT", str(ROOT / "runs" / "lmb_two_team_video_checkpoint.json")))
+TEAMS = {t.strip() for t in os.environ.get("LMB_VIDEO_TEAMS", "MEX,TIJ").split(",") if t.strip()}
 LEAGUE_LMB = "616a0762c122029009e74144"
 MAX_SCAN = int(os.environ.get("LMB_VIDEO_MAX_SCAN", "1600"))
 
@@ -216,7 +216,14 @@ def download(url: str, asset_id: str, dest: Path) -> None:
 
 def load_players() -> list[dict[str, Any]]:
     card = json.loads((ROOT / "data" / "pregame_card_stats.json").read_text())
-    rows = [p for p in card["players"] if p.get("team") in TEAMS]
+    names = {t["abbrev"]: t["name"] for t in json.loads((ROOT / "data" / "lmb_teams.json").read_text())}
+    rows = []
+    for player in card["players"]:
+        if player.get("team") not in TEAMS:
+            continue
+        row = dict(player)
+        row["team_name"] = names.get(player["team"], player["team"])
+        rows.append(row)
     rows.sort(key=lambda p: (p["team"], p.get("last") or "", p["name"]))
     return rows
 
@@ -250,7 +257,7 @@ def main() -> int:
     ok = miss = 0
     for i, player in enumerate(players, 1):
         pid = str(player["id"])
-        team_name = "Diablos Rojos del Mexico" if player["team"] == "MEX" else "Toros de Tijuana"
+        team_name = player.get("team_name") or player["team"]
         folder = OUT / safe(team_name) / safe(last_first(player["name"]))
         prev = (ckpt.get("done") or {}).get(pid) or {}
         if prev.get("status") == "ok" and any(folder.glob("*.mp4")):
