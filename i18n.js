@@ -48,7 +48,7 @@ window.I18N = {
     pitcherAdvanceLabel: 'Pitcher advance',
     pitcherAdvanceNote: 'Team → pitcher. Full arsenal (usage / velo / IVB / HB / spin / whiff + hand splits when Statcast-tracked). Computed pitch shapes = hitter view; your uploaded movement screenshot = pitcher view. SLG heat vs R then vs L from Synergy plate location. Upload delivery; if arsenal XY empty, upload a pitcher-view TruMedia screenshot (browser-local). Mass PDF: one landscape page per arm.',
     hitterAdvanceLabel: 'Hitter advance — Synergy',
-    hitterAdvanceNote: 'All LMB teams, 2026 summer. The season bar is the Mexican League line. Pitch-type tables and location heat stay empty because this feed has no pitch locations.',
+    hitterAdvanceNote: 'All LMB teams, 2026 summer. The season bar is the Mexican League line. Pitch-type tables, location heat, and spray fill from 2026 Synergy. A player stays blank until that log is in.',
     advanceLabel: 'Pitcher advance',
     advanceNote: 'Live automation of the Rodriguez advance PDF: headshot, overview, arsenal, HB×IVB movement, arm-slot / RelX·RelZ, usage vs hand, stuff+performance, approach, vs-RHH short mix.',
     advanceHittersLabel: 'Opposing hitters — Synergy Select All',
