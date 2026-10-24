@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="shared.css?v=dor1">
+<link rel="stylesheet" href="shared.css?v=dor7">
 </head>
 <body>
 <div class="topbar">
@@ -262,7 +262,7 @@
   </div>
 
   <div id="panel-spray" class="panel">
-    <div class="section-label" data-i18n="sprayLabel">Spray charts — nobody on · RISP · 2 strikes</div>
+    <div class="section-label" data-i18n="sprayLabel">Spray charts — vs RHP | vs LHP</div>
     <div class="warn-box" id="spray-note">Loading spray availability note…</div>
     <div class="filters">
       <div class="filter-field"><label data-i18n="source">Source</label>
@@ -283,15 +283,16 @@
 </select>
       </div>
       <div class="filter-field"><label data-i18n="player">Player</label><select id="spray-player" onchange="renderSpray()"></select></div>
-      <div class="filter-field spray-filter-field"><label>Spray filters (multi-select)</label>
-        <div class="spray-toggles" id="spray-toggles">
-          <button type="button" class="btn btn-sm" onclick="spraySelectAllFilters()">All</button>
-          <label class="advance-check"><input type="checkbox" id="spray-f-risp" checked onchange="onSprayFilterChange()"> RISP</label>
-          <label class="advance-check"><input type="checkbox" id="spray-f-nonrisp" checked onchange="onSprayFilterChange()"> non-RISP</label>
-          <label class="advance-check"><input type="checkbox" id="spray-f-2k" checked onchange="onSprayFilterChange()"> 2K</label>
-          <label class="advance-check"><input type="checkbox" id="spray-f-non2k" checked onchange="onSprayFilterChange()"> non-2K</label>
-        </div>
+    </div>
+    <div class="advance-export-bar">
+      <div class="advance-export-head">
+        <strong>Mass PDF export</strong>
+        <label class="advance-check"><input type="checkbox" id="spray-select-all" onchange="toggleSprayExportAll(this.checked)"> Select all (filtered team)</label>
+        <button type="button" class="btn" onclick="exportSprayHandPdf()">Export selected → PDF</button>
+        <button type="button" class="btn" onclick="exportSprayHandZip()">Export selected → ZIP</button>
       </div>
+      <div id="spray-export-list" class="advance-export-list" aria-label="Hitters for spray PDF export"></div>
+      <div class="note" style="margin:6px 0 0">Portrait PDF — one page per checked hitter. Two columns, vs RHP and vs LHP. Each column stacks 2K, non-2K, RISP, non-RISP (eight charts). ZIP is one HTML sheet per player, same layout as the other advance exports.</div>
     </div>
     <div id="spray-hit-legend"></div>
     <div id="spray-mlb" class="spray-grid"></div>
@@ -380,12 +381,12 @@
   </div>
 </main>
 <script src="lmb_teams.js?v=dor1"></script>
-<script src="i18n.js?v=dor1"></script>
+<script src="i18n.js?v=dor7"></script>
 <script src="cards.js?v=dor1"></script>
 <script>
 let CACHE = {}, FPS = {}, sortState = {}, FPS_AVG = { fps: 0.28, fpsRisp: 0.28 };
 const pct = v => v == null ? '—' : (v*100).toFixed(1)+'%';
-const ASSET_V = 'dor6';
+const ASSET_V = 'dor7';
 function fillLmbTeamSelects(){
   if(typeof LMB_TEAMS === 'undefined') return;
   ['match-team','hvp-team','spray-team','tth-team','adv-team'].forEach(id=>{
@@ -1425,12 +1426,154 @@ function sprayTogglesHtml(prefix, onchange){
     <label class="advance-check"><input type="checkbox" id="${p}spray-f-non2k" checked onchange="${oc}"> non-2K</label>
   </div>`;
 }
+const SPRAY_HAND_ORDER = [
+  ['2k', '2K', pt => !!pt.two_strikes],
+  ['non2k', 'non-2K', pt => !pt.two_strikes],
+  ['risp', 'RISP', pt => !!pt.risp],
+  ['nonrisp', 'non-RISP', pt => !pt.risp],
+];
+function sprayPitcherHand(pt){
+  const h = String(pt?.pitcher_hand || '').toUpperCase();
+  return h === 'L' || h === 'R' ? h : '';
+}
+function sprayHandCellPoints(player, hand, pred){
+  const pts = collectSprayPoints(player).filter(pt => sprayPitcherHand(pt)===hand && pred(pt));
+  return limitRecentSprayPoints(pts, SPRAY_MAX_RECENT);
+}
+function sprayHandTaggedCount(player){
+  return collectSprayPoints(player).filter(pt => sprayPitcherHand(pt)).length;
+}
+function sprayPlayerKey(p){
+  if(p.player_id!=null && p.player_id!=='') return 'id:'+p.player_id;
+  if(p.synergy_id) return 'syn:'+p.synergy_id;
+  return 'name:'+(p.team||'')+'|'+(p.name||'');
+}
+function fillSprayExportList(list){
+  const el = document.getElementById('spray-export-list');
+  if(!el) return;
+  const prev = new Set([...el.querySelectorAll('input[type=checkbox]:checked')].map(i=>i.value));
+  const sorted = sortByLastName(list||[], p=>p.name);
+  el.innerHTML = sorted.map(p=>{
+    const id = sprayPlayerKey(p);
+    return `<label class="advance-check"><input type="checkbox" value="${id}" ${prev.has(id)?'checked':''}> ${formatLastFirst(p.name)} · ${p.team||''}</label>`;
+  }).join('') || '<span class="note">No hitters in filter.</span>';
+  const all = document.getElementById('spray-select-all');
+  if(all) all.checked = false;
+}
+function toggleSprayExportAll(on){
+  document.querySelectorAll('#spray-export-list input[type=checkbox]').forEach(cb=>{ cb.checked = !!on; });
+}
+function selectedSprayPlayers(){
+  const checked = [...document.querySelectorAll('#spray-export-list input[type=checkbox]:checked')].map(i=>i.value);
+  const pool = filteredSprayPlayers();
+  if(checked.length) return checked.map(k=>pool.find(p=>sprayPlayerKey(p)===k)).filter(Boolean);
+  const sel = document.getElementById('spray-player');
+  const idx = Number(sel?.value||0);
+  return pool[idx] ? [pool[idx]] : [];
+}
+function sprayHandCellHtml(prefix, hand, key, title, n, printPage, url){
+  const id = `${prefix}spray-${hand}-${key}`;
+  const style = printPage
+    ? 'width:2.76in;max-width:100%;height:auto;max-height:1.95in;aspect-ratio:1.414/1;object-fit:contain;display:block;background:#b7dfb9'
+    : 'width:100%;height:auto;aspect-ratio:1.414/1;background:#b7dfb9;display:block';
+  const media = (printPage && url)
+    ? `<img class="spray-print-img" id="${id}" alt="${title}" src="${url}" style="${style}"/>`
+    : `<canvas id="${id}" width="424" height="300" style="${style}"></canvas>`;
+  return `<div class="spray-card spray-hand-cell"><h3>${title}</h3>${media}<div class="note" id="${id}-n">${n==null?'':`n=${n}`}</div></div>`;
+}
+function buildSprayHandSheetHtml(player, {printPage=false, prefix='', sprayUrls=null}={}){
+  const tagged = sprayHandTaggedCount(player);
+  const total = collectSprayPoints(player).length;
+  const col = (hand, label)=>{
+    const cells = SPRAY_HAND_ORDER.map(([key, title, pred])=>{
+      const n = sprayUrls ? sprayUrls['n-'+hand+'-'+key] : sprayHandCellPoints(player, hand, pred).length;
+      const url = sprayUrls ? sprayUrls[hand+'-'+key] : '';
+      return sprayHandCellHtml(prefix, hand, key, title, n, printPage, url);
+    }).join('');
+    return `<div class="spray-hand-col"><div class="spray-hand-title">${label}</div>${cells}</div>`;
+  };
+  const warn = tagged ? '' : `<div class="note">Pitcher hand is not on these ${total} batted balls yet, so the eight charts stay empty until the log is retagged.</div>`;
+  const name = formatLastFirst(player.name) || player.name || '';
+  return `<div class="advance-sheet advance-sheet-spray${printPage?' advance-print-page':''} spray-hand-sheet">
+    <div class="advance-pdf-strip"><span class="advance-pdf-name">${name}</span><span class="advance-pdf-team">${player.team||''}</span></div>
+    ${warn}
+    ${sprayHitLegendHtml({compact: !!printPage})}
+    <div class="spray-hand-grid">${col('R','vs RHP')}${col('L','vs LHP')}</div>
+  </div>`;
+}
+function bakeSprayCanvasDataUrl(pts){
+  const c = document.createElement('canvas');
+  c.style.cssText = 'position:fixed;left:-14000px;top:0;width:424px;height:300px;visibility:hidden;pointer-events:none';
+  document.body.appendChild(c);
+  try{
+    void c.offsetWidth;
+    drawSpray(c, pts, {dispW:424, dispH:300});
+    const url = c.toDataURL('image/png');
+    if(url && url.startsWith('data:image/png') && url.length > 12000) return url;
+    return '';
+  }catch(e){
+    return '';
+  }finally{
+    c.remove();
+  }
+}
+function bakeSprayHandUrls(player){
+  const urls = {};
+  SPRAY_HAND_ORDER.forEach(([key,,pred])=>{
+    ['R','L'].forEach(hand=>{
+      const pts = sprayHandCellPoints(player, hand, pred);
+      urls[hand+'-'+key] = bakeSprayCanvasDataUrl(pts);
+      urls['n-'+hand+'-'+key] = pts.length;
+    });
+  });
+  return urls;
+}
+function paintSprayHandSheet(player, prefix, doc){
+  SPRAY_HAND_ORDER.forEach(([key,,pred])=>{
+    ['R','L'].forEach(hand=>{
+      const id = `${prefix}spray-${hand}-${key}`;
+      const canvas = doc.getElementById(id);
+      const pts = sprayHandCellPoints(player, hand, pred);
+      if(canvas && String(canvas.tagName||'').toUpperCase()==='CANVAS'){
+        const w = Math.max(280, Math.round(canvas.clientWidth||360));
+        drawSpray(canvas, pts, {dispW:w, dispH:Math.round(w/SPRAY_ASPECT)});
+      }
+      const nEl = doc.getElementById(id+'-n');
+      if(nEl) nEl.textContent = `n=${pts.length}`;
+    });
+  });
+}
+function exportSprayHandPdf(){
+  const players = selectedSprayPlayers();
+  if(!players.length){ alert('Select at least one hitter to export.'); return; }
+  const body = players.map((p,i)=>{
+    const urls = bakeSprayHandUrls(p);
+    return buildSprayHandSheetHtml(p, {printPage:true, prefix:`s${i}-`, sprayUrls:urls});
+  }).join('\n');
+  openAdvancePrintWindow('Spray Charts Export', body, {
+    orientation:'portrait',
+    pageMargin:'0.38in 0.32in 0.28in 0.32in',
+    autoPrint:true
+  });
+}
+function exportSprayHandZip(){
+  const players = selectedSprayPlayers();
+  if(!players.length){ alert('Select at least one hitter to export.'); return; }
+  const files = players.map(p=>{
+    const urls = bakeSprayHandUrls(p);
+    return {
+      name: `${p.team||'TEAM'}/${playerFileStem(p.name)}.html`,
+      data: sheetHtmlFile(p.name, buildSprayHandSheetHtml(p, {printPage:true, prefix:'z-', sprayUrls:urls})),
+    };
+  });
+  downloadBlob(zipStore(files), 'spray_charts.zip');
+}
 function renderSpray(){
   const spray=CACHE.spray||{};
   const src=document.getElementById('spray-source')?.value || 'synergy';
   const noteEl=document.getElementById('spray-note');
   if(src==='synergy'){
-    noteEl.textContent = spray.synergy_note || 'Synergy LBPRC spray. Multi-select: RISP/non-RISP and 2K/non-2K are independent.';
+    noteEl.textContent = 'Eight charts on one page: vs RHP and vs LHP, each with 2K, non-2K, RISP, and non-RISP. Each chart is the most recent 100 balls in play in that split. Hand is the pitcher who threw the pitch.';
   } else {
     noteEl.textContent = spray.aaa_note || 'AAA true spray splits unavailable.';
   }
@@ -1443,23 +1586,14 @@ function renderSpray(){
       || '<option value="">No spray data for this source/team</option>';
     sel.dataset.ready='1';
   }
-  const idx=Number(sel.value||0);
-  const st = getSprayFilterState('');
+  fillSprayExportList(players);
   const grid=document.getElementById('spray-mlb');
   if(!players.length){ grid.innerHTML='<div class="note">No spray points for this source / team filter.</div>'; }
   else {
+    const idx=Number(sel.value||0);
     const player=players[idx]||players[0];
-    let pts = collectSprayPoints(player);
-    // MLB source may lack flags — show all points when flags missing
-    const hasFlags = pts.some(p=> 'risp' in p || 'two_strikes' in p);
-    if(hasFlags) pts = filterSprayPoints(pts, st);
-    pts = limitRecentSprayPoints(pts, SPRAY_MAX_RECENT);
-    const f=fpsFor(player.player_id);
-    grid.innerHTML = `<div class="spray-card"><h3>${player.name}${player.team?' · '+player.team:''} · ${sprayFilterLabel(st)} · n=${pts.length} (recent)</h3>
-      <canvas id="spray-cv"></canvas>
-      <div class="note" style="margin-top:8px">${player.source||''}${f.fps!=null?` · FPS% ${pct(f.fps)} · FPS% RISP ${pct(f.fpsRisp)}`:''}
-        ${hasFlags?'':' · (no runner/count flags on this source — showing all points)'}</div></div>`;
-    requestAnimationFrame(()=>drawSpray(document.getElementById('spray-cv'), pts));
+    grid.innerHTML = buildSprayHandSheetHtml(player, {prefix:'view-'});
+    requestAnimationFrame(()=>paintSprayHandSheet(player, 'view-', document));
   }
   const avgs=spray.aaa_averages||{};
   const team=document.getElementById('spray-team').value;
@@ -3244,6 +3378,27 @@ function portraitExportCss(kind){
       .advance-sheet-hitter,
       .advance-sheet-hitter *:not(.rate-cell){color:#000!important}
   `;
+  if(kind==='spray') return `
+      html,body{min-height:0!important;height:auto!important;background:#fff!important;color:#000!important}
+      .advance-sheet-spray.advance-print-page{
+        width:7.86in;max-width:7.86in;height:10.2in;max-height:10.2in;overflow:hidden;
+        display:flex;flex-direction:column;box-sizing:border-box;margin:0;
+      }
+      .advance-sheet-spray .advance-pdf-strip{display:flex;align-items:baseline;gap:8px;border-bottom:1px solid #ccc;margin:0 0 2px;padding-bottom:1px}
+      .advance-sheet-spray .advance-pdf-name{font-size:16px;font-weight:800;color:#000}
+      .advance-sheet-spray .advance-pdf-team{font-size:13px;font-weight:700;color:#000}
+      .advance-sheet-spray .spray-hit-legend{margin:0 0 2px;padding:1px 4px;font-size:8px}
+      .advance-sheet-spray .spray-hand-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;flex:1 1 auto;min-height:0}
+      .advance-sheet-spray .spray-hand-col{display:flex;flex-direction:column;min-height:0;gap:2px}
+      .advance-sheet-spray .spray-hand-title{font-size:13px;font-weight:800;text-align:center;margin:0;color:#000}
+      .advance-sheet-spray .spray-hand-cell{margin:0;min-height:0;display:flex;flex-direction:column;align-items:center;padding:0}
+      .advance-sheet-spray .spray-hand-cell h3{font-size:10px;margin:0;line-height:1.1;color:#000}
+      .advance-sheet-spray .spray-hand-cell .note{font-size:8px;margin:0;line-height:1;color:#333}
+      .advance-sheet-spray img.spray-print-img{
+        width:2.76in;max-width:100%;height:auto;max-height:1.95in;object-fit:contain;display:block;
+        background:#b7dfb9!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;
+      }
+  `;
   return '';
 }
 function openAdvancePrintWindow(title, bodyHtml, {afterWrite, orientation='landscape', autoPrint=true, pageMargin=null}={}){
@@ -3313,6 +3468,7 @@ function openAdvancePrintWindow(title, bodyHtml, {afterWrite, orientation='lands
       .advance-sheet-pitcher .advance-movement-frame .advance-movement-shot{width:100%;height:100%;object-fit:contain;object-position:center;background:#0e1a2b}
       .advance-sheet-pitcher .advance-headshot,.advance-sheet-pitcher .advance-hero{display:none!important}`;
   const hitterH = orientation === 'portrait' ? portraitExportCss('hitter') : '';
+  const sprayH = bodyHtml.includes('advance-sheet-spray') ? portraitExportCss('spray') : '';
   const autoPrintScript = autoPrint
     ? `<script>window.onload=()=>setTimeout(()=>window.print(),500);<\/script>`
     : '';
@@ -3329,6 +3485,7 @@ function openAdvancePrintWindow(title, bodyHtml, {afterWrite, orientation='lands
       .spray-card canvas{background:#b7dfb9!important;filter:none!important}
       ${pitcherH}
       ${hitterH}
+      ${sprayH}
       @media print {
         @page { size: ${page}; margin: ${margin}; }
         body{padding:0;background:#fff!important;color-scheme:only light}
@@ -3337,6 +3494,7 @@ function openAdvancePrintWindow(title, bodyHtml, {afterWrite, orientation='lands
         .spray-card canvas,.spray-print-img{background:#b7dfb9!important;filter:none!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
         ${pitcherH}
         ${hitterH}
+        ${sprayH}
       }
     </style></head><body>${bodyHtml}
     ${autoPrintScript}
@@ -3424,8 +3582,8 @@ function playerFileStem(name){
 function sheetHtmlFile(title, body){
   const base = location.href.replace(/[^/]*$/, '');
   const css = new URL('shared.css?v=' + ASSET_V, base).href;
-  const kind = body.includes('advance-sheet-pitcher') ? 'pitcher' : (body.includes('advance-sheet-hitter') ? 'hitter' : '');
-  const margin = kind === 'hitter' ? '1.15in 0.28in 0.28in 0.28in' : '0.32in';
+  const kind = body.includes('advance-sheet-pitcher') ? 'pitcher' : (body.includes('advance-sheet-hitter') ? 'hitter' : (body.includes('advance-sheet-spray') ? 'spray' : ''));
+  const margin = kind === 'hitter' ? '1.15in 0.28in 0.28in 0.28in' : (kind === 'spray' ? '0.38in 0.32in 0.28in 0.32in' : '0.32in');
   const page = kind ? `<style>
       @page { size: letter portrait; margin: ${margin}; }
       html,body{background:#fff;margin:0;padding:0;color:#111;color-scheme:only light;-webkit-print-color-adjust:exact;print-color-adjust:exact}

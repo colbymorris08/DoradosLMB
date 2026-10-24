@@ -1377,6 +1377,18 @@ tbody tr:hover { background: rgba(110, 168, 255, 0.08); }
 .hitter-spray-pair {
   display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;
 }
+.spray-hand-sheet { max-width: 1100px; }
+.spray-hand-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; margin-top: 8px; }
+.spray-hand-title { text-align: center; font-size: 18px; font-weight: 800; margin: 0 0 6px; letter-spacing: .04em; }
+.spray-hand-cell { margin: 0 0 10px; }
+.spray-hand-cell h3 { font-size: 13px; margin: 0 0 4px; text-align: center; }
+.spray-hand-cell canvas, .spray-hand-cell img.spray-print-img {
+  width: 100%; height: auto; aspect-ratio: 1.414 / 1; background: #b7dfb9; display: block;
+}
+.spray-hand-sheet .advance-pdf-strip { display: flex; gap: 10px; align-items: baseline; margin-bottom: 6px; }
+.spray-hand-sheet .advance-pdf-name { font-size: 22px; font-weight: 800; }
+.spray-hand-sheet .advance-pdf-team { font-size: 16px; font-weight: 650; }
+@media (max-width: 720px) { .spray-hand-grid { grid-template-columns: 1fr; } }
 .hitter-summer-bar {
   margin: 8px 0 10px;
   overflow-x: auto;
